@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Lane Blaze — by Vikas</title>
+<title>Lane Blaze v13 — by Vikas</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{
@@ -19,7 +19,7 @@
   canvas{display:block;}
 
   #msg-box{
-    position:absolute;top:36%;left:50%;transform:translateX(-50%);
+    position:absolute;top:14%;left:50%;transform:translateX(-50%);
     background:rgba(0,0,0,0.82);border:2px solid #FFD700;color:#FFD700;
     font-size:17px;font-weight:bold;letter-spacing:3px;padding:8px 22px;
     pointer-events:none;opacity:0;transition:opacity 0.25s;
@@ -132,7 +132,7 @@
       <div class="hl">LIVES</div>
       <div id="lives-row"></div>
     </div>
-    <div id="mute-btn" onclick="toggleMute()">🔊 SOUND</div>
+    <div id="mute-btn" onclick="toggleMute()">🔊 MUSIC+SFX</div>
     <div id="chaos-label">⚡ CHAOS!</div>
     <div id="chaos-bar-wrap"><div id="chaos-bar" style="width:100%"></div></div>
     <div id="theme-btn" onclick="cycleRoadTheme()">🎨 DEFAULT</div>
@@ -188,6 +188,8 @@ function toggleMute() {
   const btn = document.getElementById('mute-btn');
   btn.textContent = muted ? '🔇 MUTED' : '🔊 SOUND';
   btn.classList.toggle('muted', muted);
+  if (muted) stopMusic();
+  else if (gState === 'playing') startMusic();
 }
 
 function getAudio() {
@@ -195,12 +197,122 @@ function getAudio() {
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
   }
   if (muted || audioCtx.state === 'closed') return null;
-  // iOS Safari suspends context — always try to resume on each sound call
   if (audioCtx.state === 'suspended') {
     audioCtx.resume().catch(()=>{});
-    return null; // will work on next call once resumed
+    return null;
   }
   return audioCtx;
+}
+
+// ── CHIPTUNE BGM ENGINE ────────────────────────────────
+// A looping 16-step sequencer driving bass + melody.
+// All notes are scheduled ahead via Web Audio time, so
+// there is never a persistent oscillator running —
+// the same technique that avoids the iOS freeze.
+
+let musicScheduler = null;   // setInterval handle
+let musicStep = 0;
+let nextNoteTime = 0;
+const NOTE_NAMES = {
+  C3:131,D3:147,E3:165,F3:175,G3:196,A3:220,B3:247,
+  C4:262,D4:294,E4:330,F4:349,G4:392,A4:440,B4:494,
+  C5:523,D5:587,E5:659,F5:698,G5:784,A5:880,
+  R:0
+};
+const N = NOTE_NAMES;
+
+// Two-bar melody pattern (16 steps, 16th notes)
+const MELODY_PAT = [
+  N.E4,N.R, N.G4,N.R, N.A4,N.G4,N.E4,N.R,
+  N.D4,N.R, N.F4,N.R, N.G4,N.F4,N.D4,N.R,
+];
+// Two-bar bass pattern
+const BASS_PAT = [
+  N.C3,N.R, N.C3,N.G3, N.A3,N.R, N.A3,N.E3,
+  N.F3,N.R, N.F3,N.C3, N.G3,N.R, N.G3,N.D3,
+];
+
+function scheduleNote(ac, freq, startTime, dur, type, vol, masterGain) {
+  if (!freq) return; // rest
+  try {
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, startTime);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + dur * 0.85);
+    o.connect(g); g.connect(masterGain);
+    o.start(startTime); o.stop(startTime + dur);
+  } catch(e) {}
+}
+
+function startMusic() {
+  if (musicScheduler) return;  // already running
+  const ac = getAudio(); if (!ac) return;
+  // Master gain for music (separate from SFX)
+  if (!window._musicGain) {
+    window._musicGain = ac.createGain();
+    window._musicGain.gain.value = 0.18;
+    window._musicGain.connect(ac.destination);
+  }
+  nextNoteTime = ac.currentTime + 0.05;
+  musicStep = 0;
+
+  // Schedule notes slightly ahead using lookahead scheduler
+  // This is the standard Web Audio scheduling pattern — robust on iOS
+  function tick() {
+    const ac2 = getAudio(); if (!ac2 || !window._musicGain) return;
+    const stg = STAGES[Math.min(stageIdx, STAGES.length-1)];
+    // BPM increases with stage: 160 → 180 → 200 → 220
+    const bpm = 160 + stageIdx * 20;
+    const stepDur = 60 / bpm / 4; // 16th note duration
+    const lookahead = 0.12; // seconds ahead to schedule
+
+    while (nextNoteTime < ac2.currentTime + lookahead) {
+      const step = musicStep % 16;
+      // Melody — triangle wave, higher octave feel
+      scheduleNote(ac2, MELODY_PAT[step], nextNoteTime, stepDur*0.7,
+                   'triangle', 0.5, window._musicGain);
+      // Bass — square wave, lower
+      scheduleNote(ac2, BASS_PAT[step], nextNoteTime, stepDur*0.6,
+                   'square', 0.3, window._musicGain);
+      // Percussion on beats 1 and 3 (steps 0 and 8)
+      if (step === 0 || step === 8) {
+        scheduleNote(ac2, 80, nextNoteTime, stepDur*0.4,
+                     'square', 0.25, window._musicGain);
+      }
+      // Hihat feel on even steps
+      if (step % 2 === 0) {
+        scheduleNote(ac2, 1200+Math.random()*400, nextNoteTime, stepDur*0.15,
+                     'sawtooth', 0.04, window._musicGain);
+      }
+      nextNoteTime += stepDur;
+      musicStep++;
+    }
+  }
+  tick();
+  musicScheduler = setInterval(tick, 40); // check every 40ms
+}
+
+function stopMusic() {
+  if (musicScheduler) { clearInterval(musicScheduler); musicScheduler = null; }
+  // Fade out master gain to avoid clicks
+  if (window._musicGain && audioCtx) {
+    try {
+      window._musicGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+      setTimeout(() => {
+        if (window._musicGain) {
+          window._musicGain.disconnect();
+          window._musicGain = null;
+        }
+      }, 400);
+    } catch(e) {}
+  }
+}
+
+function restartMusic() {
+  stopMusic();
+  setTimeout(() => { if (gState === 'playing' && !muted) startMusic(); }, 200);
 }
 
 function playCrash() {
@@ -281,12 +393,13 @@ function laneXatVY(laneX, vy) { return ROAD_MID + (laneX-ROAD_MID)*vToScale(vy);
 // STAGES
 // ═══════════════════════════════════════════════════════
 const STAGES = [
-  // baseSpd = auto-cruise speed, maxSpd = max with up-arrow
-  // carInt  = frames between spawns (lower = more cars)
-  {name:'COASTAL',  bg:'beach',    baseSpd:1.6, maxSpd:2.8, carInt:95,  fuelInt:260, trackLen:4500},
-  {name:'DESERT',   bg:'desert',   baseSpd:2.1, maxSpd:3.6, carInt:78,  fuelInt:240, trackLen:5500},
-  {name:'MOUNTAIN', bg:'mountain', baseSpd:2.7, maxSpd:4.4, carInt:62,  fuelInt:220, trackLen:6500},
-  {name:'NIGHT',    bg:'night',    baseSpd:3.3, maxSpd:5.2, carInt:46,  fuelInt:200, trackLen:7500},
+  // baseSpeeds restored to v9 tuning (felt right)
+  // trackLens = v10 lengths +15% for better playability
+  // ~35-40s per stage at base, ~25s at full boost
+  {name:'COASTAL',  bg:'beach',    baseSpd:1.6, maxSpd:2.8, carInt:80,  fuelInt:200, trackLen:1850},
+  {name:'DESERT',   bg:'desert',   baseSpd:2.1, maxSpd:3.6, carInt:65,  fuelInt:180, trackLen:2300},
+  {name:'MOUNTAIN', bg:'mountain', baseSpd:2.7, maxSpd:4.4, carInt:52,  fuelInt:160, trackLen:2900},
+  {name:'NIGHT',    bg:'night',    baseSpd:3.3, maxSpd:5.2, carInt:40,  fuelInt:140, trackLen:3500},
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -340,20 +453,25 @@ function makeEnemy(vyOverride) {
 
 function prepopulateRoad() {
   enemies = [];
-  // Only 4 cars, all in the far portion of the road
-  const depths = [0.10, 0.20, 0.32, 0.44];
-  const pool = [0,1,2,0,1,2];
-  for (let i = pool.length-1; i > 0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [pool[i],pool[j]] = [pool[j],pool[i]];
-  }
-  depths.forEach((d,i) => {
+  // Always start with just 2 cars, placed far up near the horizon
+  // regardless of stage — the carInt spawner fills up density naturally
+  // This gives the player a clear view at the start of every stage
+  const depths = [0.08, 0.18];
+  const lanes = [0,1,2]; shuffle(lanes);
+  depths.forEach((d, i) => {
     const e = makeEnemy(d * VLEN);
-    const lane = pool[i % pool.length];
-    e.lane = lane; e.targetLane = lane; e.x = LANES[lane];
+    e.lane = lanes[i]; e.targetLane = lanes[i]; e.x = LANES[lanes[i]];
     enemies.push(e);
   });
   fuels = [];
+}
+
+function shuffle(arr) {
+  for (let i = arr.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+  return arr;
 }
 
 function updateEnemyAI(e) {
@@ -824,6 +942,8 @@ function initGame() {
   initTrees(); prepopulateRoad();
   document.getElementById('overlay').classList.add('hidden');
   gState='playing';
+  // Start music after short delay (iOS needs gesture → audioCtx first)
+  setTimeout(() => { if (!muted) startMusic(); }, 300);
 }
 
 // startNextStage inlined into doStageClear for correct stage sequencing
@@ -838,7 +958,7 @@ function doCrash() {
 }
 
 function doGameOver() {
-  gState='gameover'; playTone(110, 0.7, 0.35);
+  stopMusic(); gState='gameover'; playTone(110, 0.7, 0.35);
   const ov = document.getElementById('overlay');
   ov.innerHTML = `
     <h1 style="color:#f00;text-shadow:2px 2px #600">GAME OVER</h1>
@@ -851,7 +971,7 @@ function doGameOver() {
 }
 
 function doVictory() {
-  gState='gameover'; score+=20000; playClear();
+  stopMusic(); gState='gameover'; score+=20000; playClear();
   const ov = document.getElementById('overlay');
   ov.innerHTML = `
     <h1 style="color:#FFD700">YOU WIN!</h1>
@@ -903,6 +1023,7 @@ function doStageClear() {
   setTimeout(() => {
     ov.classList.add('hidden');
     gState='playing';
+    if (!muted) restartMusic(); // new stage = new tempo
   }, 3000);
 }
 
@@ -935,9 +1056,13 @@ let touchBoost = false;
 
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  // Always try to resume AudioContext on any touch — iOS requires this
+  // Always resume AudioContext on touch — iOS requires this before any audio
   if (!audioCtx) { try { audioCtx = new(window.AudioContext||window.webkitAudioContext)(); } catch(er){} }
-  if (audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  if (audioCtx && audioCtx.state==='suspended') {
+    audioCtx.resume().then(() => {
+      if (gState==='playing' && !musicScheduler && !muted) startMusic();
+    }).catch(()=>{});
+  }
   if (gState==='title' || gState==='gameover') { initGame(); return; }
   if (gState!=='playing') return;
   if (e.touches.length >= 2) {
@@ -1012,7 +1137,9 @@ function update() {
   distance += scrollSpd*0.38;
   score += Math.round(scrollSpd*2);
 
-  if (frameCount % stg.carInt === 0) spawnEnemy();
+  // Grace period: no new cars for first 4 seconds of each stage
+  // Gives player time to see the road and orient before traffic builds
+  if (frameCount > 240 && frameCount % stg.carInt === 0) spawnEnemy();
   if (frameCount % stg.fuelInt === 0) spawnFuel();
   // Pills from stage 2+ — every ~20s, but not in first 10s of stage
   if (stageIdx >= 1 && frameCount > 600 && frameCount % 1200 === 0) spawnPill();
