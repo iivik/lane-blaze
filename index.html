@@ -13,8 +13,7 @@
   }
   #layout{display:flex;align-items:stretch;box-shadow:0 0 60px rgba(0,0,0,0.9);}
 
-  #minimap-col{background:#0a0a0a;width:36px;border-right:2px solid #333;position:relative;}
-  #minimap-canvas{position:absolute;top:0;left:0;}
+
 
   #canvas-wrap{position:relative;}
   canvas{display:block;}
@@ -93,9 +92,7 @@
 </head>
 <body>
 <div id="layout">
-  <div id="minimap-col">
-    <canvas id="minimap-canvas" width="36" height="620"></canvas>
-  </div>
+
   <div id="canvas-wrap">
     <canvas id="game" width="360" height="620"></canvas>
     <div id="title-badge">LANE BLAZE</div>
@@ -111,7 +108,7 @@
       <p style="margin-top:5px;color:#ccc;font-size:11px">📱 iPhone: drag to steer · 2 fingers = boost</p>
       <p style="color:#888;font-size:10px">💊 Purple pill = CHAOS · Green pill = restore order</p>
       <div style="margin:10px 0 4px;color:#f80;font-size:11px;font-weight:bold;letter-spacing:1px">── OBJECTIVE ──</div>
-      <p>Reach the finish flag across 4 stages</p>
+      <p>Reach the finish flag across all stages</p>
       <p>Collect ⛽ fuel · Dodge all traffic</p>
       <p style="color:#ff8;font-size:10px;margin-top:4px">⚠ Cars change lanes randomly — stay alert!</p>
       <div class="blink">▶ PRESS SPACE / ENTER / TAP TO START</div>
@@ -264,9 +261,7 @@ function playTone(fr, dur, vol) {
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = 360, H = 620;
-const mmCanvas = document.getElementById('minimap-canvas');
-const mmCtx = mmCanvas.getContext('2d');
-mmCanvas.height = H;
+// minimap is now drawn inside game canvas on the right shoulder
 
 // ═══════════════════════════════════════════════════════
 // GEOMETRY
@@ -472,58 +467,62 @@ function drawAntidote(a) {
 }
 
 // ═══════════════════════════════════════════════════════
-// MINIMAP
+// PROGRESS STRIP — drawn inside game canvas on right shoulder
+// Sits between road edge and ocean, always visible on iPhone
 // ═══════════════════════════════════════════════════════
-function drawMinimap() {
-  const mm = mmCtx, MW=36, MH=H;
-  mm.clearRect(0,0,MW,MH);
-  mm.fillStyle = '#0d0d0d'; mm.fillRect(0,0,MW,MH);
-
+function drawProgressStrip() {
   const pct = Math.min(1, distance / STAGES[stageIdx].trackLen);
-  const stripW=14, stripX=(MW-stripW)/2;
+  // Strip sits just inside the right shoulder
+  const SX = ROAD_R + 4;   // x position
+  const SW = 10;            // strip width
+  const SY_TOP = HORIZON_Y + 8;
+  const SY_BOT = H - 10;
+  const SH = SY_BOT - SY_TOP;
 
-  // Track strip
-  mm.fillStyle = '#222'; mm.fillRect(stripX, 0, stripW, MH);
+  // Background track
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(SX, SY_TOP, SW, SH);
 
-  // Completed portion
-  mm.fillStyle = 'rgba(255,140,0,0.22)';
-  mm.fillRect(stripX, MH-(MH*pct), stripW, MH*pct);
+  // Completed (orange fill from bottom)
+  const doneH = SH * pct;
+  ctx.fillStyle = 'rgba(255,140,0,0.7)';
+  ctx.fillRect(SX, SY_BOT - doneH, SW, doneH);
 
-  // Progress line
-  mm.fillStyle = '#f80';
-  mm.fillRect(stripX-2, MH-(MH*pct)-1, stripW+4, 2);
+  // Progress marker line
+  const lineY = SY_BOT - doneH;
+  ctx.fillStyle = '#FFD700';
+  ctx.fillRect(SX - 2, lineY - 1, SW + 4, 3);
 
-  // Finish flag at top
-  const flagY=4, fs=4;
-  for (let i=0; i<3; i++) for (let j=0; j<4; j++) {
-    mm.fillStyle = (i+j)%2===0 ? '#fff' : '#000';
-    mm.fillRect(stripX+i*fs, flagY+j*fs, fs, fs);
+  // Finish flag at top — checkered 2×4 tiles
+  const flagY = SY_TOP;
+  const fs = 4;
+  for (let i=0; i<2; i++) for (let j=0; j<4; j++) {
+    ctx.fillStyle = (i+j)%2===0 ? '#fff' : '#000';
+    ctx.fillRect(SX + i*fs, flagY + j*fs, fs, fs);
   }
-  mm.fillStyle = '#888'; mm.fillRect(stripX-2, flagY, 2, 22);
-  mm.fillStyle = 'rgba(255,200,0,0.75)';
-  mm.font = 'bold 7px Courier New'; mm.textAlign = 'center';
-  mm.fillText('FINISH', MW/2, flagY+30);
+  // Tiny pole
+  ctx.fillStyle = '#aaa';
+  ctx.fillRect(SX - 2, flagY, 2, 18);
 
-  // Enemy dots
-  enemies.forEach(e => {
-    const dotY = MH-(MH*pct) - ((1-(e.vy/VLEN))*(MH*0.35));
-    if (dotY > 10 && dotY < MH-20) {
-      mm.fillStyle = '#FFD700';
-      mm.fillRect(stripX+4, dotY, 6, 4);
-    }
-  });
+  // "FINISH" label
+  ctx.fillStyle = 'rgba(255,220,80,0.9)';
+  ctx.font = 'bold 7px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('FIN', SX + SW/2, flagY + 24);
 
-  // Player dot
-  const carY = MH-(MH*pct)-8;
-  mm.fillStyle = '#FF2222'; mm.fillRect(stripX+2, carY, 10, 6);
-  mm.fillStyle = '#aaddff'; mm.fillRect(stripX+3, carY+1, 8, 3);
+  // Player car dot on strip
+  const carDotY = SY_BOT - doneH - 6;
+  ctx.fillStyle = '#FF2222';
+  ctx.fillRect(SX + 1, carDotY, 8, 5);
+  ctx.fillStyle = '#aaddff';
+  ctx.fillRect(SX + 2, carDotY + 1, 6, 2);
 
-  // Labels
-  mm.fillStyle = 'rgba(255,255,255,0.35)';
-  mm.font = '7px Courier New'; mm.textAlign = 'center';
-  mm.fillText(Math.round(distance)+'m', MW/2, MH-4);
-  mm.fillText('START', MW/2, MH-14);
-  mm.textAlign = 'left';
+  // START label at bottom
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '6px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('GO', SX + SW/2, SY_BOT + 8);
+  ctx.textAlign = 'left';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -827,20 +826,7 @@ function initGame() {
   gState='playing';
 }
 
-function startNextStage() {
-  stageIdx++;
-  if (stageIdx >= STAGES.length) { doVictory(); return; }
-  fuel = Math.min(100, fuel+38);
-  distance=0; particles=[];
-  pills=[]; antidotes=[]; chaosMode=false; chaosTimer=0;
-  antidoteSpawned=false; antidoteSpawnTimer=0;
-  frameCount=0;
-  scrollSpd=STAGES[stageIdx].baseSpd; targetSpd=scrollSpd;
-  initTrees(); prepopulateRoad();
-  // stageIdx is already incremented, so stageIdx+1 is the display number
-  showMsg('STAGE '+(stageIdx+1)+' — '+STAGES[stageIdx].name, 240);
-  gState='playing';
-}
+// startNextStage inlined into doStageClear for correct stage sequencing
 
 function doCrash() {
   playCrash();
@@ -878,18 +864,46 @@ function doVictory() {
 }
 
 function doStageClear() {
-  gState='stageclear';
+  // Immediately advance to next stage data so background/HUD are correct
   const clearedNum = stageIdx+1;
-  const nextNum    = stageIdx+2;
   const bonus=5000*clearedNum; score+=bonus; playClear();
-  const isLast = (stageIdx+1 >= STAGES.length);
-  const msg = isLast
-    ? 'STAGE '+clearedNum+' CLEAR!  ALL STAGES DONE!'
-    : 'STAGE '+clearedNum+' CLEAR!   ▶ STAGE '+nextNum+'...';
-  showMsg(msg, 280);
-  // Update HUD immediately so stage number is correct during wait
+  
+  // Advance stageIdx NOW — environment changes immediately
+  stageIdx++;
+  const isLast = (stageIdx >= STAGES.length);
+  
+  if (isLast) {
+    doVictory();
+    return;
+  }
+  
+  // Reset all stage state immediately
+  fuel = Math.min(100, fuel+38);
+  distance=0; particles=[];
+  pills=[]; antidotes=[]; chaosMode=false; chaosTimer=0;
+  antidoteSpawned=false; antidoteSpawnTimer=0;
+  frameCount=0;
+  scrollSpd=STAGES[stageIdx].baseSpd; targetSpd=scrollSpd;
+  initTrees(); prepopulateRoad();
+  
+  // Show fullscreen transition overlay briefly, then resume
+  gState='stageclear';
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <div style="color:#aaa;font-size:11px;letter-spacing:3px">STAGE ${clearedNum} COMPLETE</div>
+    <h1 style="font-size:28px;margin:8px 0">+${bonus.toLocaleString()}</h1>
+    <div style="color:#f80;font-size:18px;font-weight:bold;letter-spacing:4px;margin:12px 0">
+      STAGE ${stageIdx+1}
+    </div>
+    <div style="color:#FFD700;font-size:14px;letter-spacing:2px">${STAGES[stageIdx].name}</div>
+    <div style="color:#555;font-size:11px;margin-top:16px">starting in 3 seconds...</div>`;
+  ov.classList.remove('hidden');
   updateHUD();
-  setTimeout(() => startNextStage(), 3000);
+  
+  setTimeout(() => {
+    ov.classList.add('hidden');
+    gState='playing';
+  }, 3000);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -924,7 +938,8 @@ canvas.addEventListener('touchstart', e => {
   // Always try to resume AudioContext on any touch — iOS requires this
   if (!audioCtx) { try { audioCtx = new(window.AudioContext||window.webkitAudioContext)(); } catch(er){} }
   if (audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
-  if (gState!=='playing') { initGame(); return; }
+  if (gState==='title' || gState==='gameover') { initGame(); return; }
+  if (gState!=='playing') return;
   if (e.touches.length >= 2) {
     touchBoost = true; touchActive = true;
     touchTargetX = clampRoadX(clientToGameX(e.touches[0].clientX));
@@ -953,7 +968,8 @@ canvas.addEventListener('touchend', e => {
 }, {passive:false});
 
 document.getElementById('overlay').addEventListener('click', () => {
-  if (gState!=='playing') initGame();
+  // Don't restart during stage transition — only on title/gameover
+  if (gState==='title' || gState==='gameover') initGame();
 });
 
 // ═══════════════════════════════════════════════════════
@@ -1137,7 +1153,7 @@ function draw() {
     ctx.fillStyle='rgba(255,0,0,0.1)'; ctx.fillRect(0,0,W,H);
   }
 
-  drawMinimap();
+  drawProgressStrip(); // draw progress on right shoulder inside game canvas
   // Always keep HUD updated even when update() is paused (e.g. stageclear state)
   if(gState==='stageclear') updateHUD();
 }
