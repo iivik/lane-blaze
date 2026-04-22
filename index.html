@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lane Blaze — by Vikas</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#0a0a0a;display:flex;justify-content:center;align-items:center;
+    min-height:100vh;font-family:'Courier New',monospace;
+    overflow:hidden;user-select:none;-webkit-user-select:none;
+  }
+  #layout{display:flex;align-items:stretch;box-shadow:0 0 60px rgba(0,0,0,0.9);}
+
+  #minimap-col{background:#0a0a0a;width:36px;border-right:2px solid #333;position:relative;}
+  #minimap-canvas{position:absolute;top:0;left:0;}
+
+  #canvas-wrap{position:relative;}
+  canvas{display:block;}
+
+  #msg-box{
+    position:absolute;top:36%;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,0.82);border:2px solid #FFD700;color:#FFD700;
+    font-size:17px;font-weight:bold;letter-spacing:3px;padding:8px 22px;
+    pointer-events:none;opacity:0;transition:opacity 0.25s;
+    white-space:nowrap;z-index:15;border-radius:2px;
+  }
+
+  #overlay{
+    position:absolute;inset:0;background:rgba(0,0,0,0.91);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#fff;z-index:20;
+  }
+  #overlay.hidden{display:none;}
+  #overlay h1{font-size:32px;color:#FFD700;text-shadow:3px 3px #c00,6px 6px #600;letter-spacing:5px;margin-bottom:2px;}
+  #overlay .sub{color:#f80;font-size:12px;letter-spacing:3px;margin-bottom:16px;}
+  #overlay p{color:#aaa;font-size:12px;margin:3px 0;}
+  #overlay .key{color:#fff;background:#333;border:1px solid #666;border-radius:3px;padding:1px 6px;font-size:11px;}
+  .blink{animation:blink .75s step-end infinite;color:#fff;font-size:14px;margin-top:20px;}
+  @keyframes blink{50%{opacity:0}}
+
+  #hud{
+    background:#000;width:128px;border-left:2px solid #333;
+    padding:10px 12px;display:flex;flex-direction:column;gap:10px;
+  }
+  .hb{display:flex;flex-direction:column;gap:2px;}
+  .hl{color:#444;font-size:9px;letter-spacing:1px;text-transform:uppercase;}
+  .hv{color:#fff;font-size:16px;font-weight:bold;letter-spacing:2px;font-family:'Courier New',monospace;}
+  #stage-box{border:2px solid #f80;border-radius:3px;background:#111;text-align:center;padding:5px 6px;}
+  #stage-box .sl{color:#f80;font-size:9px;letter-spacing:2px;}
+  #stage-box .sv{color:#fff;font-size:22px;font-weight:bold;}
+  #stage-box .sn{color:#aaa;font-size:8px;letter-spacing:1px;margin-top:1px;}
+  .fuel-wrap{background:#1a1a1a;height:8px;border:1px solid #444;border-radius:2px;overflow:hidden;margin-top:3px;}
+  #fuel-bar{height:100%;border-radius:2px;transition:width .12s;}
+  .ftag{background:#cc0000;color:#fff;font-size:10px;font-weight:bold;padding:2px 6px;letter-spacing:1px;display:inline-block;}
+  #lives-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;}
+  .life-dot{width:11px;height:11px;background:#CC0000;border-radius:50%;border:1px solid #ff5555;}
+  .life-dot.dead{background:#2a2a2a;border-color:#444;}
+
+  #mute-btn{
+    background:#1a1a1a;border:1px solid #444;border-radius:3px;
+    color:#aaa;font-size:11px;letter-spacing:1px;padding:6px 0;
+    text-align:center;cursor:pointer;transition:background .15s,color .15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #mute-btn:hover{background:#333;color:#fff;}
+  #mute-btn.muted{background:#330000;border-color:#880000;color:#ff6666;}
+  #legend{
+    border-top:1px solid #222;padding-top:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .leg-row{display:flex;align-items:center;gap:6px;}
+  .leg-icon{width:16px;height:12px;border-radius:2px;flex-shrink:0;}
+  .leg-txt{color:#555;font-size:8px;letter-spacing:0.5px;line-height:1.3;}
+  .leg-txt b{color:#888;display:block;font-size:9px;}
+  #chaos-bar-wrap{
+    background:#1a1a1a;border:1px solid #333;border-radius:2px;
+    overflow:hidden;height:4px;margin-top:2px;display:none;
+  }
+  #chaos-bar{height:100%;background:#9900FF;transition:width 0.3s;}
+  #chaos-label{color:#9900FF;font-size:9px;letter-spacing:1px;display:none;text-align:center;}
+
+  #brand{position:absolute;bottom:5px;right:7px;color:rgba(255,255,255,0.2);font-size:9px;letter-spacing:1px;pointer-events:none;z-index:5;}
+  #theme-btn{
+    background:#1a1a1a;border:1px solid #444;border-radius:3px;
+    color:#aaa;font-size:10px;letter-spacing:1px;padding:5px 0;
+    text-align:center;cursor:pointer;transition:background .15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #theme-btn:hover{background:#333;color:#fff;}
+  #title-badge{position:absolute;top:5px;left:7px;color:rgba(255,200,0,0.35);font-size:9px;font-weight:bold;letter-spacing:2px;pointer-events:none;z-index:5;}
+</style>
+</head>
+<body>
+<div id="layout">
+  <div id="minimap-col">
+    <canvas id="minimap-canvas" width="36" height="620"></canvas>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="game" width="360" height="620"></canvas>
+    <div id="title-badge">LANE BLAZE</div>
+    <div id="brand">by Vikas</div>
+    <div id="msg-box"></div>
+    <div id="overlay">
+      <h1>LANE BLAZE</h1>
+      <div class="sub">ARCADE ROAD RACER</div>
+      <div style="color:rgba(255,200,80,0.7);font-size:10px;letter-spacing:3px;margin-bottom:6px">CREATED BY VIKAS</div>
+      <div style="margin:0 0 6px;color:#f80;font-size:11px;font-weight:bold;letter-spacing:1px">── CONTROLS ──</div>
+      <p><span class="key">← →</span> or <span class="key">A D</span> &nbsp; Steer</p>
+      <p><span class="key">↑</span> Speed up &nbsp;|&nbsp; <span class="key">↓</span> Brake</p>
+      <p style="margin-top:5px;color:#ccc;font-size:11px">📱 iPhone: drag to steer · 2 fingers = boost</p>
+      <p style="color:#888;font-size:10px">💊 Purple pill = CHAOS · Green pill = restore order</p>
+      <div style="margin:10px 0 4px;color:#f80;font-size:11px;font-weight:bold;letter-spacing:1px">── OBJECTIVE ──</div>
+      <p>Reach the finish flag across 4 stages</p>
+      <p>Collect ⛽ fuel · Dodge all traffic</p>
+      <p style="color:#ff8;font-size:10px;margin-top:4px">⚠ Cars change lanes randomly — stay alert!</p>
+      <div class="blink">▶ PRESS SPACE / ENTER / TAP TO START</div>
+    </div>
+  </div>
+  <div id="hud">
+    <div id="stage-box">
+      <div class="sl">STAGE</div>
+      <div class="sv" id="hv-stage">1</div>
+      <div class="sn" id="hv-stagename">COASTAL</div>
+    </div>
+    <div class="hb"><div class="hl">SCORE</div><div class="hv" id="hv-score">000000</div></div>
+    <div class="hb"><div class="hl">SPEED km/h</div><div class="hv" id="hv-speed">000</div></div>
+    <div class="hb"><div class="hl">DISTANCE m</div><div class="hv" id="hv-dist">0000</div></div>
+    <div class="hb">
+      <div class="ftag">FUEL</div>
+      <div class="fuel-wrap"><div id="fuel-bar" style="width:100%"></div></div>
+      <div class="hv" id="hv-fuel" style="font-size:14px;margin-top:2px">100</div>
+    </div>
+    <div class="hb">
+      <div class="hl">LIVES</div>
+      <div id="lives-row"></div>
+    </div>
+    <div id="mute-btn" onclick="toggleMute()">🔊 SOUND</div>
+    <div id="chaos-label">⚡ CHAOS!</div>
+    <div id="chaos-bar-wrap"><div id="chaos-bar" style="width:100%"></div></div>
+    <div id="theme-btn" onclick="cycleRoadTheme()">🎨 DEFAULT</div>
+    <div id="legend">
+      <div style="color:#333;font-size:8px;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">── LEGEND ──</div>
+      <div class="leg-row">
+        <div class="leg-icon" style="background:#FFD700;border:1px solid #aa8800"></div>
+        <div class="leg-txt"><b>FUEL CAN</b>Refills your fuel tank</div>
+      </div>
+      <div class="leg-row">
+        <div class="leg-icon" style="background:#9900FF;border:1px solid #6600aa"></div>
+        <div class="leg-txt"><b>CHAOS PILL</b>Cars go wild! (Stage 2+)</div>
+      </div>
+      <div class="leg-row">
+        <div class="leg-icon" style="background:#00CC44;border:1px solid #008833"></div>
+        <div class="leg-txt"><b>ANTIDOTE</b>Restores order +3000pts</div>
+      </div>
+      <div style="border-top:1px solid #1a1a1a;margin:3px 0"></div>
+      <div style="color:#333;font-size:8px;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">── KEYS ──</div>
+      <div class="leg-txt"><b style="color:#666">← →</b> Steer</div>
+      <div class="leg-txt"><b style="color:#666">↑</b> Accelerate</div>
+      <div class="leg-txt"><b style="color:#666">↓</b> Brake</div>
+      <div class="leg-txt" style="margin-top:2px"><b style="color:#555">📱 2-finger tap</b> Speed boost</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// AUDIO — event sounds only, no continuous oscillator
+// AudioContext created lazily on first interaction only
+// ═══════════════════════════════════════════════════════
+let audioCtx = null;
+let muted = false;
+// Road theme override (null = use stage default)
+const ROAD_THEMES = [
+  null, // default — uses stage bg
+  {road:'#3a2a1a', roadLine:'#ff9900', shoulder:'#1a1a1a', label:'TARMAC'},
+  {road:'#1a1a2e', roadLine:'#00ffff', shoulder:'#0a0a1a', label:'NEON'},
+  {road:'#2a1a0a', roadLine:'#FFD700', shoulder:'#3a2010', label:'DUST'},
+  {road:'#1a2a1a', roadLine:'#88ff44', shoulder:'#0a1a0a', label:'RAIN'},
+];
+let roadThemeIdx = 0;
+function cycleRoadTheme(){
+  roadThemeIdx=(roadThemeIdx+1)%ROAD_THEMES.length;
+  const t=ROAD_THEMES[roadThemeIdx];
+  const btn=document.getElementById('theme-btn');
+  btn.textContent = t ? '🎨 '+t.label : '🎨 DEFAULT';
+}
+
+function toggleMute() {
+  muted = !muted;
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = muted ? '🔇 MUTED' : '🔊 SOUND';
+  btn.classList.toggle('muted', muted);
+}
+
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
+  }
+  if (muted || audioCtx.state === 'closed') return null;
+  // iOS Safari suspends context — always try to resume on each sound call
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(()=>{});
+    return null; // will work on next call once resumed
+  }
+  return audioCtx;
+}
+
+function playCrash() {
+  const ac = getAudio(); if (!ac) return;
+  try {
+    if (ac.state === 'suspended') ac.resume();
+    const buf = ac.createBuffer(1, ac.sampleRate * 0.4, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length) * 0.8;
+    const s = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+    g.gain.value = 0.5; f.type = 'lowpass'; f.frequency.value = 600;
+    s.buffer = buf; s.connect(f); f.connect(g); g.connect(ac.destination); s.start();
+  } catch(e) {}
+}
+
+function playFuel() {
+  const ac = getAudio(); if (!ac) return;
+  try {
+    if (ac.state === 'suspended') ac.resume();
+    const g = ac.createGain(); g.gain.value = 0.25; g.connect(ac.destination);
+    [523, 659, 784, 1047].forEach((fr, i) => {
+      const o = ac.createOscillator(); o.type = 'square'; o.frequency.value = fr;
+      o.connect(g);
+      o.start(ac.currentTime + i * 0.07);
+      o.stop(ac.currentTime + i * 0.07 + 0.06);
+    });
+  } catch(e) {}
+}
+
+function playClear() {
+  const ac = getAudio(); if (!ac) return;
+  try {
+    if (ac.state === 'suspended') ac.resume();
+    const g = ac.createGain(); g.gain.value = 0.25; g.connect(ac.destination);
+    [523,659,784,1047,784,1047,1319].forEach((fr, i) => {
+      const o = ac.createOscillator(); o.type = 'square'; o.frequency.value = fr;
+      o.connect(g);
+      o.start(ac.currentTime + i * 0.1);
+      o.stop(ac.currentTime + i * 0.1 + 0.09);
+    });
+  } catch(e) {}
+}
+
+function playTone(fr, dur, vol) {
+  const ac = getAudio(); if (!ac) return;
+  try {
+    if (ac.state === 'suspended') ac.resume();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'square'; o.frequency.value = fr; g.gain.value = vol || 0.2;
+    o.connect(g); g.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 360, H = 620;
+const mmCanvas = document.getElementById('minimap-canvas');
+const mmCtx = mmCanvas.getContext('2d');
+mmCanvas.height = H;
+
+// ═══════════════════════════════════════════════════════
+// GEOMETRY
+// ═══════════════════════════════════════════════════════
+const ROAD_L=60, ROAD_R=280, ROAD_W=220, ROAD_MID=170;
+const LANE_W = ROAD_W / 3;
+const LANES = [ROAD_L+LANE_W*0.5, ROAD_L+LANE_W*1.5, ROAD_L+LANE_W*2.5];
+const VLEN = 1400;
+const HORIZON_Y = 58;
+const BOTTOM_Y = H - 90;  // player sits higher so thumb doesn't cover it on iPhone
+
+function vToPx(vy)    { return HORIZON_Y + (vy/VLEN)*(BOTTOM_Y-HORIZON_Y); }
+function vToScale(vy) { return 0.10 + (vy/VLEN)*0.90; }
+function laneXatVY(laneX, vy) { return ROAD_MID + (laneX-ROAD_MID)*vToScale(vy); }
+
+// ═══════════════════════════════════════════════════════
+// STAGES
+// ═══════════════════════════════════════════════════════
+const STAGES = [
+  // baseSpd = auto-cruise speed, maxSpd = max with up-arrow
+  // carInt  = frames between spawns (lower = more cars)
+  {name:'COASTAL',  bg:'beach',    baseSpd:1.6, maxSpd:2.8, carInt:95,  fuelInt:260, trackLen:4500},
+  {name:'DESERT',   bg:'desert',   baseSpd:2.1, maxSpd:3.6, carInt:78,  fuelInt:240, trackLen:5500},
+  {name:'MOUNTAIN', bg:'mountain', baseSpd:2.7, maxSpd:4.4, carInt:62,  fuelInt:220, trackLen:6500},
+  {name:'NIGHT',    bg:'night',    baseSpd:3.3, maxSpd:5.2, carInt:46,  fuelInt:200, trackLen:7500},
+];
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let gState = 'title';
+let score=0, fuel=100, lives=3, stageIdx=0;
+let scrollSpd=STAGES[0].baseSpd, targetSpd=scrollSpd;
+let frameCount=0, dashOff=0, waveOff=0, distance=0, msgTimer=0, invincible=0;
+let player = {x:ROAD_MID, w:22, h:36};
+let enemies=[], fuels=[], particles=[], treeRows=[];
+let pills=[], antidotes=[];          // power-up items
+let chaosMode=false;                 // pill active — cars go wild
+let chaosTimer=0;                    // countdown to auto-expiry (safety net)
+let antidoteSpawned=false;           // antidote already on road
+let antidoteSpawnTimer=0;            // delay before antidote appears
+
+// ═══════════════════════════════════════════════════════
+// THEMES
+// ═══════════════════════════════════════════════════════
+const THEMES = {
+  beach:   {shoulder:'#C09040', road:'#606060', roadLine:'#fff',    sky:'#50b8ff'},
+  desert:  {shoulder:'#C8A040', road:'#787060', roadLine:'#fff',    sky:'#E08030'},
+  mountain:{shoulder:'#607050', road:'#484848', roadLine:'#fff',    sky:'#7888a0'},
+  night:   {shoulder:'#182018', road:'#282828', roadLine:'#FFD700', sky:'#040410'},
+};
+const ENEMY_COLORS = ['#FFD700','#00AAFF','#FF8800','#88DDAA','#FF66BB','#00FFCC'];
+function theme() { return THEMES[STAGES[stageIdx].bg]; }
+
+// ═══════════════════════════════════════════════════════
+// ENEMY AI
+// ═══════════════════════════════════════════════════════
+function makeEnemy(vyOverride) {
+  // Spawn in a truly random lane — not biased toward center
+  const lane = Math.floor(Math.random()*3);
+  const vy = (vyOverride !== undefined) ? vyOverride : VLEN*0.13;
+  // Stagger initial timer so cars don't all decide at the same frame
+  const initTimer = 120 + Math.floor(Math.random()*300);
+  return {
+    x: LANES[lane], vy, w:22, h:36,
+    color: ENEMY_COLORS[Math.floor(Math.random()*ENEMY_COLORS.length)],
+    ownSpd: 0.20 + Math.random()*0.65,
+    lane, targetLane: lane,
+    laneTimer: initTimer,
+    moving: false,
+    wobblePhase: Math.random()*Math.PI*2,
+    wobbleAmp: 1 + Math.random()*2.5,  // very subtle — just organic feel
+    driftX: 0,
+  };
+}
+
+function prepopulateRoad() {
+  enemies = [];
+  // Only 4 cars, all in the far portion of the road
+  const depths = [0.10, 0.20, 0.32, 0.44];
+  const pool = [0,1,2,0,1,2];
+  for (let i = pool.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [pool[i],pool[j]] = [pool[j],pool[i]];
+  }
+  depths.forEach((d,i) => {
+    const e = makeEnemy(d * VLEN);
+    const lane = pool[i % pool.length];
+    e.lane = lane; e.targetLane = lane; e.x = LANES[lane];
+    enemies.push(e);
+  });
+  fuels = [];
+}
+
+function updateEnemyAI(e) {
+  const tx = LANES[e.targetLane];
+  const diff = tx - e.x;
+
+  if (chaosMode) {
+    // CHAOS: cars drift fast and randomly, ignoring normal rules
+    e.x += diff * 0.055;
+    if (Math.abs(diff) < 2) {
+      e.x = tx; e.lane = e.targetLane;
+      // Pick a new random lane immediately — no hold time
+      const dirs = [];
+      if (e.lane > 0) dirs.push(-1);
+      if (e.lane < 2) dirs.push(1);
+      if (dirs.length > 0 && Math.random() < 0.7) {
+        const dir = dirs[Math.floor(Math.random()*dirs.length)];
+        e.targetLane = e.lane + dir;
+        e.moving = true;
+      }
+      e.laneTimer = 20 + Math.floor(Math.random()*40);
+    }
+  } else if (e.moving) {
+    // Mid lane-change: slow steady drift, complete before new decisions
+    e.x += diff * 0.016;
+    if (Math.abs(diff) < 1.2) {
+      e.x = tx;
+      e.lane = e.targetLane;
+      e.moving = false;
+      e.laneTimer = 200 + Math.floor(Math.random()*260);
+    }
+  } else {
+    e.laneTimer--;
+    if (e.laneTimer <= 0) {
+      if (Math.random() < 0.35) {
+        const dirs = [];
+        if (e.lane > 0) dirs.push(-1);
+        if (e.lane < 2) dirs.push(1);
+        if (dirs.length > 0) {
+          const dir = dirs[Math.floor(Math.random()*dirs.length)];
+          e.targetLane = e.lane + dir;
+          e.moving = true;
+        }
+      } else {
+        e.laneTimer = 200 + Math.floor(Math.random()*260);
+      }
+    }
+  }
+
+  // Very subtle positional wobble — makes cars feel alive, not robotic
+  // Small enough that it never misleads the player about lane position
+  e.wobblePhase += 0.025;
+  e.driftX = Math.sin(e.wobblePhase) * e.wobbleAmp;
+}
+
+function spawnEnemy() {
+  enemies.push(makeEnemy());
+}
+function spawnFuel() {
+  const lane = Math.floor(Math.random()*3);
+  fuels.push({x:LANES[lane], vy:VLEN*0.12, w:20, h:20});
+}
+function spawnPill() {
+  if (stageIdx < 1) return; // only from stage 2 onwards
+  const lane = Math.floor(Math.random()*3);
+  pills.push({x:LANES[lane], vy:VLEN*0.10, w:18, h:18});
+}
+function spawnAntidote() {
+  const lane = Math.floor(Math.random()*3);
+  antidotes.push({x:LANES[lane], vy:VLEN*0.08, w:18, h:18});
+  antidoteSpawned=true;
+}
+
+function drawPill(p) {
+  const sc=vToScale(p.vy); if(sc<0.09) return;
+  const px=laneXatVY(p.x,p.vy), py=vToPx(p.vy); if(py<HORIZON_Y) return;
+  const r=(p.w/2)*sc;
+  // Pulsing glow
+  if(Math.floor(frameCount/6)%2===0){
+    ctx.fillStyle='rgba(180,0,255,0.25)';
+    ctx.beginPath(); ctx.arc(px,py,r+4*sc,0,Math.PI*2); ctx.fill();
+  }
+  // Purple pill capsule
+  ctx.fillStyle='#9900FF';
+  ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#CC66FF';
+  ctx.beginPath(); ctx.arc(px-r*0.25,py-r*0.25,r*0.45,0,Math.PI*2); ctx.fill();
+  if(sc>0.4){
+    ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(7,Math.round(9*sc))}px Courier New`;
+    ctx.textAlign='center'; ctx.fillText('!',px,py+3*sc); ctx.textAlign='left';
+  }
+}
+
+function drawAntidote(a) {
+  const sc=vToScale(a.vy); if(sc<0.09) return;
+  const px=laneXatVY(a.x,a.vy), py=vToPx(a.vy); if(py<HORIZON_Y) return;
+  const r=(a.w/2)*sc;
+  // Pulsing green glow
+  if(Math.floor(frameCount/5)%2===0){
+    ctx.fillStyle='rgba(0,255,100,0.25)';
+    ctx.beginPath(); ctx.arc(px,py,r+4*sc,0,Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle='#00CC44';
+  ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#88FF99';
+  ctx.beginPath(); ctx.arc(px-r*0.25,py-r*0.25,r*0.45,0,Math.PI*2); ctx.fill();
+  if(sc>0.4){
+    ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(7,Math.round(9*sc))}px Courier New`;
+    ctx.textAlign='center'; ctx.fillText('✚',px,py+3*sc); ctx.textAlign='left';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MINIMAP
+// ═══════════════════════════════════════════════════════
+function drawMinimap() {
+  const mm = mmCtx, MW=36, MH=H;
+  mm.clearRect(0,0,MW,MH);
+  mm.fillStyle = '#0d0d0d'; mm.fillRect(0,0,MW,MH);
+
+  const pct = Math.min(1, distance / STAGES[stageIdx].trackLen);
+  const stripW=14, stripX=(MW-stripW)/2;
+
+  // Track strip
+  mm.fillStyle = '#222'; mm.fillRect(stripX, 0, stripW, MH);
+
+  // Completed portion
+  mm.fillStyle = 'rgba(255,140,0,0.22)';
+  mm.fillRect(stripX, MH-(MH*pct), stripW, MH*pct);
+
+  // Progress line
+  mm.fillStyle = '#f80';
+  mm.fillRect(stripX-2, MH-(MH*pct)-1, stripW+4, 2);
+
+  // Finish flag at top
+  const flagY=4, fs=4;
+  for (let i=0; i<3; i++) for (let j=0; j<4; j++) {
+    mm.fillStyle = (i+j)%2===0 ? '#fff' : '#000';
+    mm.fillRect(stripX+i*fs, flagY+j*fs, fs, fs);
+  }
+  mm.fillStyle = '#888'; mm.fillRect(stripX-2, flagY, 2, 22);
+  mm.fillStyle = 'rgba(255,200,0,0.75)';
+  mm.font = 'bold 7px Courier New'; mm.textAlign = 'center';
+  mm.fillText('FINISH', MW/2, flagY+30);
+
+  // Enemy dots
+  enemies.forEach(e => {
+    const dotY = MH-(MH*pct) - ((1-(e.vy/VLEN))*(MH*0.35));
+    if (dotY > 10 && dotY < MH-20) {
+      mm.fillStyle = '#FFD700';
+      mm.fillRect(stripX+4, dotY, 6, 4);
+    }
+  });
+
+  // Player dot
+  const carY = MH-(MH*pct)-8;
+  mm.fillStyle = '#FF2222'; mm.fillRect(stripX+2, carY, 10, 6);
+  mm.fillStyle = '#aaddff'; mm.fillRect(stripX+3, carY+1, 8, 3);
+
+  // Labels
+  mm.fillStyle = 'rgba(255,255,255,0.35)';
+  mm.font = '7px Courier New'; mm.textAlign = 'center';
+  mm.fillText(Math.round(distance)+'m', MW/2, MH-4);
+  mm.fillText('START', MW/2, MH-14);
+  mm.textAlign = 'left';
+}
+
+// ═══════════════════════════════════════════════════════
+// SCENERY
+// ═══════════════════════════════════════════════════════
+function initTrees() {
+  treeRows = [];
+  for (let i=0; i<22; i++) treeRows.push(i*40-120);
+}
+
+function drawScene() {
+  const t = theme();
+  // Apply road theme override if selected
+  const rt = ROAD_THEMES[roadThemeIdx];
+  const road    = rt ? rt.road     : t.road;
+  const shoulder= rt ? rt.shoulder : t.shoulder;
+  const roadLine= rt ? rt.roadLine : t.roadLine;
+  ctx.fillStyle = t.sky;    ctx.fillRect(0,0,W,HORIZON_Y);
+  ctx.fillStyle = shoulder; ctx.fillRect(0,HORIZON_Y,ROAD_L,H-HORIZON_Y);
+  ctx.fillStyle = road;     ctx.fillRect(ROAD_L,HORIZON_Y,ROAD_W,H-HORIZON_Y);
+  ctx.fillStyle = shoulder; ctx.fillRect(ROAD_R,HORIZON_Y,W-ROAD_R,H-HORIZON_Y);
+
+  const bg = STAGES[stageIdx].bg;
+  if      (bg==='beach')    drawOcean();
+  else if (bg==='night')    drawNightBg();
+  else if (bg==='mountain') drawMtnBg();
+  else                      drawDesertBg();
+
+  drawMarkings(t, roadLine);
+  treeRows.forEach(y => drawSceneryAt(y));
+
+  // Horizon haze
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(ROAD_L, HORIZON_Y, ROAD_W, 20);
+}
+
+function drawMarkings(t, lineColor) {
+  const rl = lineColor || t.roadLine;
+  ctx.lineWidth=3; ctx.strokeStyle=rl;
+  ctx.setLineDash([18,9]); ctx.lineDashOffset=-dashOff;
+  ctx.beginPath(); ctx.moveTo(ROAD_L,HORIZON_Y); ctx.lineTo(ROAD_L,H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ROAD_R,HORIZON_Y); ctx.lineTo(ROAD_R,H); ctx.stroke();
+  ctx.lineWidth=2; ctx.strokeStyle=rl; ctx.setLineDash([22,22]); ctx.lineDashOffset=-dashOff;
+  for (let i=1; i<3; i++) {
+    ctx.beginPath(); ctx.moveTo(ROAD_L+LANE_W*i,HORIZON_Y);
+    ctx.lineTo(ROAD_L+LANE_W*i,H); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawOcean() {
+  ctx.fillStyle = '#1660b8';
+  ctx.fillRect(ROAD_R+10, HORIZON_Y, W-ROAD_R-10, H-HORIZON_Y);
+  // Simple wave bands — not per-pixel
+  ctx.fillStyle = 'rgba(130,200,255,0.28)';
+  const ph = waveOff * 0.04;
+  [0.2, 0.45, 0.70].forEach(p => {
+    const yy = HORIZON_Y + (H-HORIZON_Y)*p;
+    const ww = 7 + Math.sin(ph + p*5)*5;
+    ctx.fillRect(ROAD_R+8, yy, ww, 4);
+  });
+}
+
+function drawNightBg() {
+  ctx.fillStyle = '#050515';
+  ctx.fillRect(ROAD_R, HORIZON_Y, W-ROAD_R, H-HORIZON_Y);
+  // Static stars
+  ctx.fillStyle = '#fff';
+  for (let i=0; i<14; i++)
+    ctx.fillRect(ROAD_R+5+(i*47)%(W-ROAD_R-8), HORIZON_Y+(i*31)%40, 1, 1);
+  // Buildings — simple rectangles, no window loop
+  [[ROAD_R+2,32,18],[ROAD_R+22,48,14],[ROAD_R+38,20,13],[ROAD_R+52,40,20],[ROAD_R+72,26,12]].forEach(([x,ht,w2]) => {
+    ctx.fillStyle = '#08082a'; ctx.fillRect(x, HORIZON_Y-ht, w2, ht+2);
+    ctx.fillStyle = 'rgba(255,210,60,0.5)';
+    ctx.fillRect(x+3, HORIZON_Y-ht+5, w2-6, 4);
+    ctx.fillRect(x+3, HORIZON_Y-ht+14, w2-6, 4);
+  });
+}
+
+function drawMtnBg() {
+  ctx.fillStyle = '#3a4830';
+  ctx.beginPath();
+  ctx.moveTo(ROAD_R,H); ctx.lineTo(ROAD_R,HORIZON_Y+8);
+  ctx.lineTo(ROAD_R+24,HORIZON_Y-30); ctx.lineTo(ROAD_R+48,HORIZON_Y+4);
+  ctx.lineTo(ROAD_R+68,HORIZON_Y-44); ctx.lineTo(W,HORIZON_Y-8); ctx.lineTo(W,H);
+  ctx.fill();
+  ctx.fillStyle = '#cce4ff';
+  ctx.beginPath(); ctx.moveTo(ROAD_R+24,HORIZON_Y-30); ctx.lineTo(ROAD_R+14,HORIZON_Y-8); ctx.lineTo(ROAD_R+34,HORIZON_Y-8); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(ROAD_R+68,HORIZON_Y-44); ctx.lineTo(ROAD_R+56,HORIZON_Y-16); ctx.lineTo(ROAD_R+80,HORIZON_Y-16); ctx.fill();
+}
+
+function drawDesertBg() {
+  ctx.fillStyle = '#c06818'; ctx.fillRect(ROAD_R, HORIZON_Y, W-ROAD_R, 20);
+  ctx.fillStyle = '#d8a038'; ctx.fillRect(ROAD_R, HORIZON_Y+20, W-ROAD_R, H-HORIZON_Y-20);
+  ctx.fillStyle = '#FFEE00';
+  ctx.beginPath(); ctx.arc(W-20, HORIZON_Y-14, 15, 0, Math.PI*2); ctx.fill();
+}
+
+function drawSceneryAt(y) {
+  if (y < -60 || y > H+20) return;
+  const bg = STAGES[stageIdx].bg;
+  const sc = Math.max(0.28, Math.min(1.1, (y-HORIZON_Y+80)/260));
+  drawItem(ctx, 20, y, bg, sc);
+  drawItem(ctx, 40, y+14, bg, sc*0.82);
+}
+
+function drawItem(c, x, y, bg, sc) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  if (bg === 'beach') {
+    c.fillStyle='#5a3010'; c.fillRect(-2,-2,4,18);
+    c.fillStyle='#1a6a1a'; c.fillRect(-12,-14,24,10);
+    c.fillStyle='#228822'; c.fillRect(-8,-22,16,10);
+    c.fillStyle='#2a9a2a'; c.fillRect(-5,-28,10,8);
+  } else if (bg === 'desert') {
+    c.fillStyle='#2a7a2a';
+    c.fillRect(-4,-22,8,26); c.fillRect(-12,-12,8,5); c.fillRect(4,-16,8,5);
+    c.fillRect(-12,-18,5,8); c.fillRect(7,-20,5,8);
+  } else if (bg === 'mountain') {
+    c.fillStyle='#6a6a5a'; c.fillRect(-10,-10,20,14);
+    c.fillStyle='#8a8a7a'; c.fillRect(-7,-16,14,8);
+    c.fillStyle='#4a4a3a'; c.fillRect(-10,2,20,4);
+  } else {
+    c.fillStyle='#666'; c.fillRect(-1,-26,2,26); c.fillRect(-1,-26,10,2);
+    c.fillStyle='#ffd060'; c.fillRect(6,-28,7,7);
+  }
+  c.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+// FINISH LINE
+// ═══════════════════════════════════════════════════════
+function drawFinishApproach() {
+  const stg = STAGES[stageIdx];
+  const distLeft = stg.trackLen - distance;
+  if (distLeft > 600) return;
+  const finVY = VLEN*(1-distLeft/600);
+  if (finVY <= 0) return;
+  const fy=vToPx(finVY), sc=vToScale(finVY);
+  const fw=ROAD_W*sc, fl=ROAD_MID-fw/2;
+  const th=Math.max(3,9*sc), tw=Math.max(2,8*sc);
+  const tiles=Math.ceil(fw/tw);
+  for (let i=0; i<tiles; i++) for (let j=0; j<3; j++) {
+    ctx.fillStyle = (i+j)%2===0 ? '#fff' : '#000';
+    ctx.fillRect(fl+i*tw, fy+j*th, tw, th);
+  }
+  const ph=34*sc;
+  ctx.fillStyle='#999';
+  ctx.fillRect(fl-3*sc,fy-ph,3*sc,ph+th*3);
+  ctx.fillRect(fl+fw,fy-ph,3*sc,ph+th*3);
+  if (sc > 0.28) {
+    const fs=6*sc;
+    for (let ii=0; ii<3; ii++) for (let jj=0; jj<4; jj++) {
+      ctx.fillStyle=(ii+jj)%2===0?'#fff':'#000';
+      ctx.fillRect(fl-3*sc+ii*fs,fy-ph+jj*fs,fs,fs);
+      ctx.fillRect(fl+fw+3*sc+ii*fs,fy-ph+jj*fs,fs,fs);
+    }
+  }
+  if (sc > 0.45) {
+    ctx.fillStyle='#FFD700';
+    ctx.font=`bold ${Math.round(10*sc)}px Courier New`;
+    ctx.textAlign='center'; ctx.fillText('FINISH',ROAD_MID,fy-3); ctx.textAlign='left';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// DRAW CARS
+// ═══════════════════════════════════════════════════════
+function drawEnemy(e) {
+  const sc=vToScale(e.vy); if (sc<0.09) return;
+  const px=laneXatVY(e.x,e.vy)+e.driftX*sc, py=vToPx(e.vy);
+  if (py < HORIZON_Y) return;
+  const w=e.w*sc, h=e.h*sc, cx=px-w/2, cy=py-h/2;
+  const c=e.color;
+  const ri=parseInt(c.slice(1,3),16), gi=parseInt(c.slice(3,5),16), bi=parseInt(c.slice(5,7),16);
+  const cl=`rgb(${Math.min(255,ri+70)},${Math.min(255,gi+70)},${Math.min(255,bi+70)})`;
+  ctx.fillStyle=c;         ctx.fillRect(cx+3*sc,cy,w-6*sc,h);
+  ctx.fillStyle=cl;        ctx.fillRect(cx+4*sc,cy+2*sc,w-8*sc,5*sc);
+  ctx.fillStyle='#88CCFF'; ctx.fillRect(cx+3*sc,cy+2*sc,w-6*sc,5*sc);
+  ctx.fillStyle='#111';
+  ctx.fillRect(cx,cy+3*sc,3*sc,8*sc); ctx.fillRect(cx+w-3*sc,cy+3*sc,3*sc,8*sc);
+  ctx.fillRect(cx,cy+h-11*sc,3*sc,8*sc); ctx.fillRect(cx+w-3*sc,cy+h-11*sc,3*sc,8*sc);
+  ctx.fillStyle='#88CCFF'; ctx.fillRect(cx+3*sc,cy+h-10*sc,w-6*sc,5*sc);
+}
+
+function drawFuelItem(f) {
+  const sc=vToScale(f.vy); if (sc<0.09) return;
+  const px=laneXatVY(f.x,f.vy), py=vToPx(f.vy);
+  if (py < HORIZON_Y) return;
+  const w=f.w*sc, h=f.h*sc;
+  if (sc>0.45 && Math.floor(frameCount/8)%2===0) {
+    ctx.fillStyle='rgba(255,220,0,0.18)';
+    ctx.fillRect(px-w/2-3,py-h/2-3,w+6,h+6);
+  }
+  ctx.fillStyle='#D8A000'; ctx.fillRect(px-w/2,py-h/2,w,h);
+  ctx.fillStyle='#FFD700'; ctx.fillRect(px-w/2+2*sc,py-h/2+2*sc,w-4*sc,h-4*sc);
+  if (sc>0.4) {
+    ctx.fillStyle='#fff';
+    ctx.font=`bold ${Math.max(8,Math.round(10*sc))}px Courier New`;
+    ctx.textAlign='center'; ctx.fillText('F',px,py+3*sc); ctx.textAlign='left';
+  }
+}
+
+function drawPlayer() {
+  if (invincible>0 && Math.floor(frameCount/4)%2===0) return;
+  const px=player.x, py=vToPx(VLEN);
+  const w=player.w, h=player.h, cx=px-w/2, cy=py-h/2;
+  ctx.fillStyle='#CC0000'; ctx.fillRect(cx+4,cy,w-8,h);
+  ctx.fillStyle='#FF2222'; ctx.fillRect(cx+5,cy+2,w-10,7);
+  ctx.fillStyle='#88CCFF'; ctx.fillRect(cx+4,cy+4,w-8,7);
+  ctx.fillStyle='#111';
+  ctx.fillRect(cx-1,cy+5,5,10); ctx.fillRect(cx+w-4,cy+5,5,10);
+  ctx.fillRect(cx-1,cy+h-15,5,10); ctx.fillRect(cx+w-4,cy+h-15,5,10);
+  ctx.fillStyle='#88CCFF'; ctx.fillRect(cx+4,cy+h-13,w-8,7);
+  ctx.fillStyle='#ff3300';
+  ctx.fillRect(cx+2,cy+h-5,5,3); ctx.fillRect(cx+w-7,cy+h-5,5,3);
+}
+
+// ═══════════════════════════════════════════════════════
+// PARTICLES
+// ═══════════════════════════════════════════════════════
+function addParticles(px, py) {
+  for (let i=0; i<20; i++) {
+    const a=Math.random()*Math.PI*2, s=1+Math.random()*5;
+    particles.push({
+      x:px, y:py, vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+      life:30+Math.random()*20, maxL:50,
+      color:['#FF4400','#FFaa00','#FFFF00','#fff'][Math.floor(Math.random()*4)],
+      size:2+Math.random()*4
+    });
+  }
+}
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life/p.maxL;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ═══════════════════════════════════════════════════════
+// COLLISION
+// ═══════════════════════════════════════════════════════
+function collidesPlayer(e) {
+  if (e.vy < VLEN*0.82) return false;
+  const ex=laneXatVY(e.x,e.vy)+e.driftX*vToScale(e.vy);
+  const ey=vToPx(e.vy), py=vToPx(VLEN);
+  return Math.abs(ex-player.x)<18 && Math.abs(ey-py)<22;
+}
+function collidesFuel(f) {
+  if (f.vy < VLEN*0.82) return false;
+  const fx=laneXatVY(f.x,f.vy), fy=vToPx(f.vy), py=vToPx(VLEN);
+  return Math.abs(fx-player.x)<22 && Math.abs(fy-py)<24;
+}
+function collidesPickup(p) {
+  if (p.vy < VLEN*0.82) return false;
+  const px2=laneXatVY(p.x,p.vy), py2=vToPx(p.vy), py=vToPx(VLEN);
+  return Math.abs(px2-player.x)<22 && Math.abs(py2-py)<24;
+}
+
+// ═══════════════════════════════════════════════════════
+// HUD
+// ═══════════════════════════════════════════════════════
+function updateHUD() {
+  const stg = STAGES[stageIdx];
+  document.getElementById('hv-score').textContent = String(score).padStart(6,'0');
+  document.getElementById('hv-speed').textContent = String(Math.round(scrollSpd*58)).padStart(3,'0');
+  document.getElementById('hv-dist').textContent  = String(Math.round(distance)).padStart(4,'0');
+  document.getElementById('hv-fuel').textContent  = String(Math.max(0,Math.round(fuel))).padStart(3,'0');
+  document.getElementById('hv-stage').textContent = stageIdx+1;
+  document.getElementById('hv-stagename').textContent = stg.name;
+  const fb = document.getElementById('fuel-bar');
+  fb.style.width = Math.max(0,fuel)+'%';
+  fb.style.background = fuel>40 ? '#00cc44' : fuel>20 ? '#ffaa00' : '#ee2200';
+  const lr = document.getElementById('lives-row');
+  lr.innerHTML = '';
+  for (let i=0; i<3; i++) {
+    const d = document.createElement('div');
+    d.className = 'life-dot' + (i>=lives?' dead':'');
+    lr.appendChild(d);
+  }
+}
+
+function showMsg(txt, frames) {
+  const el = document.getElementById('msg-box');
+  el.textContent = txt; el.style.opacity = '1'; msgTimer = frames;
+}
+
+// ═══════════════════════════════════════════════════════
+// GAME FLOW
+// ═══════════════════════════════════════════════════════
+function initGame() {
+  score=0; fuel=100; lives=3; stageIdx=0;
+  scrollSpd=STAGES[0].baseSpd; targetSpd=scrollSpd;
+  frameCount=0; dashOff=0; waveOff=0; distance=0; invincible=0; msgTimer=0;
+  player={x:ROAD_MID, w:22, h:36}; particles=[];
+  pills=[]; antidotes=[]; chaosMode=false; chaosTimer=0;
+  antidoteSpawned=false; antidoteSpawnTimer=0;
+  initTrees(); prepopulateRoad();
+  document.getElementById('overlay').classList.add('hidden');
+  gState='playing';
+}
+
+function startNextStage() {
+  stageIdx++;
+  if (stageIdx >= STAGES.length) { doVictory(); return; }
+  fuel = Math.min(100, fuel+38);
+  distance=0; particles=[];
+  pills=[]; antidotes=[]; chaosMode=false; chaosTimer=0;
+  antidoteSpawned=false; antidoteSpawnTimer=0;
+  frameCount=0;
+  scrollSpd=STAGES[stageIdx].baseSpd; targetSpd=scrollSpd;
+  initTrees(); prepopulateRoad();
+  // stageIdx is already incremented, so stageIdx+1 is the display number
+  showMsg('STAGE '+(stageIdx+1)+' — '+STAGES[stageIdx].name, 240);
+  gState='playing';
+}
+
+function doCrash() {
+  playCrash();
+  addParticles(player.x, vToPx(VLEN));
+  lives--;
+  if (lives<=0) { doGameOver(); return; }
+  invincible=170;
+  showMsg('CRASH!  ♥ '+lives+' LEFT', 120);
+}
+
+function doGameOver() {
+  gState='gameover'; playTone(110, 0.7, 0.35);
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <h1 style="color:#f00;text-shadow:2px 2px #600">GAME OVER</h1>
+    <div style="color:#ff0;font-size:20px;font-weight:bold;margin:10px 0">SCORE: ${String(score).padStart(6,'0')}</div>
+    <p>Stage: ${stageIdx+1} — ${STAGES[stageIdx].name}</p>
+    <p>Distance: ${Math.round(distance)} / ${STAGES[stageIdx].trackLen} m</p>
+    <div style="margin-top:16px;color:rgba(255,200,80,0.6);font-size:10px;letter-spacing:2px">LANE BLAZE · CREATED BY VIKAS</div>
+    <div class="blink">▶ PRESS SPACE / ENTER / TAP TO RETRY</div>`;
+  ov.classList.remove('hidden');
+}
+
+function doVictory() {
+  gState='gameover'; score+=20000; playClear();
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <h1 style="color:#FFD700">YOU WIN!</h1>
+    <div style="color:#0f0;font-size:14px;margin:6px 0">ALL 4 STAGES COMPLETE!</div>
+    <div style="color:#ff0;font-size:20px;font-weight:bold;margin:8px 0">FINAL: ${String(score).padStart(6,'0')}</div>
+    <div style="margin:12px 0 4px;color:rgba(255,200,80,0.85);font-size:12px;letter-spacing:2px">LANE BLAZE</div>
+    <div style="color:rgba(255,200,80,0.65);font-size:10px;letter-spacing:3px;margin-bottom:8px">CREATED BY VIKAS</div>
+    <div class="blink">▶ TAP / PRESS SPACE TO PLAY AGAIN</div>`;
+  ov.classList.remove('hidden');
+}
+
+function doStageClear() {
+  gState='stageclear';
+  const clearedNum = stageIdx+1;
+  const nextNum    = stageIdx+2;
+  const bonus=5000*clearedNum; score+=bonus; playClear();
+  const isLast = (stageIdx+1 >= STAGES.length);
+  const msg = isLast
+    ? 'STAGE '+clearedNum+' CLEAR!  ALL STAGES DONE!'
+    : 'STAGE '+clearedNum+' CLEAR!   ▶ STAGE '+nextNum+'...';
+  showMsg(msg, 280);
+  // Update HUD immediately so stage number is correct during wait
+  updateHUD();
+  setTimeout(() => startNextStage(), 3000);
+}
+
+// ═══════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════
+let keys = {};
+let touchActive=false, touchTargetX=ROAD_MID;
+
+function clampRoadX(x) {
+  return Math.max(ROAD_L+player.w/2+3, Math.min(ROAD_R-player.w/2-3, x));
+}
+function clientToGameX(clientX) {
+  const rect = canvas.getBoundingClientRect();
+  return (clientX - rect.left) * (W / rect.width);
+}
+
+document.addEventListener('keydown', e => {
+  keys[e.key]=true;
+  if ((e.key===' '||e.key==='Enter') && gState!=='playing') initGame();
+  if ([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key]=false; });
+
+// Touch speed control: 
+// - Two-finger touch = accelerate (one finger steers, second finger = boost)
+// - Single finger in bottom 20% of canvas = brake zone
+// - Single finger elsewhere = steer (position-mapped)
+let touchBoost = false;
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  // Always try to resume AudioContext on any touch — iOS requires this
+  if (!audioCtx) { try { audioCtx = new(window.AudioContext||window.webkitAudioContext)(); } catch(er){} }
+  if (audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  if (gState!=='playing') { initGame(); return; }
+  if (e.touches.length >= 2) {
+    touchBoost = true; touchActive = true;
+    touchTargetX = clampRoadX(clientToGameX(e.touches[0].clientX));
+    return;
+  }
+  touchActive = true; touchBoost = false;
+  touchTargetX = clampRoadX(clientToGameX(e.touches[0].clientX));
+}, {passive:false});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (gState!=='playing') return;
+  if (e.touches.length >= 2) {
+    touchBoost = true;
+    touchTargetX = clampRoadX(clientToGameX(e.touches[0].clientX));
+    return;
+  }
+  touchBoost = false;
+  touchTargetX = clampRoadX(clientToGameX(e.touches[0].clientX));
+}, {passive:false});
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) { touchActive=false; touchBoost=false; }
+  else if (e.touches.length === 1) { touchBoost=false; }
+}, {passive:false});
+
+document.getElementById('overlay').addEventListener('click', () => {
+  if (gState!=='playing') initGame();
+});
+
+// ═══════════════════════════════════════════════════════
+// UPDATE
+// ═══════════════════════════════════════════════════════
+function update() {
+  if (gState!=='playing') return;
+  frameCount++; waveOff+=1.5;
+
+  const stg = STAGES[stageIdx];
+
+  // Speed — keyboard or two-finger touch for boost
+  const boosting = keys['ArrowUp']||keys['w']||keys['W']||touchBoost;
+  const braking  = keys['ArrowDown']||keys['s']||keys['S'];
+  if (boosting) {
+    targetSpd = Math.min(stg.maxSpd, targetSpd+0.07);
+  } else if (braking) {
+    targetSpd = Math.max(stg.baseSpd*0.25, targetSpd-0.10);
+  } else {
+    targetSpd += (stg.baseSpd - targetSpd)*0.025;
+  }
+  scrollSpd += (targetSpd-scrollSpd)*0.08;
+
+  // Steer
+  let dx=0;
+  if (keys['ArrowLeft']||keys['a']||keys['A']) dx=-4.0;
+  if (keys['ArrowRight']||keys['d']||keys['D']) dx=4.0;
+  if (touchActive) {
+    const diff = touchTargetX-player.x;
+    dx = Math.sign(diff) * Math.min(Math.abs(diff)*0.22, 7.0);
+  }
+  player.x = Math.max(ROAD_L+player.w/2+3, Math.min(ROAD_R-player.w/2-3, player.x+dx));
+
+  dashOff += scrollSpd*6;
+  treeRows = treeRows.map(y => { y+=scrollSpd*5; return y>H+50 ? y-22*40 : y; });
+
+  fuel -= scrollSpd*0.013*(1+stageIdx*0.15);
+  if (fuel<=0) { fuel=0; doCrash(); return; }
+
+  distance += scrollSpd*0.38;
+  score += Math.round(scrollSpd*2);
+
+  if (frameCount % stg.carInt === 0) spawnEnemy();
+  if (frameCount % stg.fuelInt === 0) spawnFuel();
+  // Pills from stage 2+ — every ~20s, but not in first 10s of stage
+  if (stageIdx >= 1 && frameCount > 600 && frameCount % 1200 === 0) spawnPill();
+  // Antidote spawns ~4 seconds after pill pickup
+  if (antidoteSpawnTimer > 0) {
+    antidoteSpawnTimer--;
+    if (antidoteSpawnTimer === 0 && !antidoteSpawned) spawnAntidote();
+  }
+  // Chaos auto-expires after 15 seconds (safety net if antidote is missed)
+  if (chaosMode) {
+    chaosTimer--;
+    if (chaosTimer <= 0) {
+      chaosMode=false; antidoteSpawned=false;
+      pills=[]; antidotes=[];
+      showMsg('CHAOS ENDED', 80);
+    }
+  }
+
+  const vScroll = scrollSpd*3.2;
+  enemies.forEach(e => { e.vy+=vScroll+e.ownSpd*0.5; updateEnemyAI(e); });
+  enemies = enemies.filter(e => e.vy < VLEN+80);
+
+  fuels.forEach(f => { f.vy+=vScroll+0.25; });
+  fuels = fuels.filter(f => f.vy < VLEN+80);
+
+  pills.forEach(p => { p.vy+=vScroll+0.2; });
+  pills = pills.filter(p => p.vy < VLEN+80);
+
+  antidotes.forEach(a => { a.vy+=vScroll+0.2; });
+  antidotes = antidotes.filter(a => a.vy < VLEN+80);
+
+  if (invincible>0) invincible--;
+
+  if (invincible===0) {
+    for (let e of enemies) { if (collidesPlayer(e)) { doCrash(); return; } }
+  }
+  for (let i=fuels.length-1; i>=0; i--) {
+    if (collidesFuel(fuels[i])) {
+      fuel=Math.min(100,fuel+32); score+=2000;
+      fuels.splice(i,1); playFuel(); showMsg('⛽ +FUEL  +2000', 70);
+    }
+  }
+  // Pill pickup — trigger chaos
+  for (let i=pills.length-1; i>=0; i--) {
+    if (collidesPickup(pills[i])) {
+      pills.splice(i,1);
+      chaosMode=true; chaosTimer=900; // 15s at 60fps
+      antidoteSpawned=false;
+      antidoteSpawnTimer=240; // antidote appears ~4s later
+      playTone(220,0.15,0.3); playTone(180,0.15,0.25);
+      showMsg('💊 CHAOS! FIND THE ANTIDOTE!', 160);
+      score+=500;
+    }
+  }
+  // Antidote pickup — restore order
+  for (let i=antidotes.length-1; i>=0; i--) {
+    if (collidesPickup(antidotes[i])) {
+      antidotes.splice(i,1);
+      chaosMode=false; chaosTimer=0; antidoteSpawned=false;
+      playTone(440,0.08,0.25); playTone(520,0.08,0.25); playTone(660,0.1,0.3);
+      showMsg('✚ ORDER RESTORED! +3000', 120);
+      score+=3000;
+      // Calm all enemy cars back to their lane
+      enemies.forEach(e => { e.targetLane=e.lane; e.moving=false; e.laneTimer=200+Math.floor(Math.random()*200); });
+    }
+  }
+
+  particles.forEach(p => { p.x+=p.vx; p.y+=p.vy; p.vx*=0.93; p.vy*=0.93; p.life--; });
+  particles = particles.filter(p => p.life>0);
+
+  if (msgTimer>0 && --msgTimer===0)
+    document.getElementById('msg-box').style.opacity='0';
+
+  if (distance >= stg.trackLen) { doStageClear(); return; }
+
+  updateHUD();
+  // Chaos status — stage badge glow + chaos bar
+  const sb = document.getElementById('stage-box');
+  const cl = document.getElementById('chaos-label');
+  const cbw = document.getElementById('chaos-bar-wrap');
+  const cb = document.getElementById('chaos-bar');
+  if(chaosMode){
+    sb.style.borderColor='#9900FF';
+    sb.style.boxShadow='0 0 8px #9900FF';
+    cl.style.display='block';
+    cbw.style.display='block';
+    cb.style.width=Math.round((chaosTimer/900)*100)+'%';
+  } else {
+    sb.style.borderColor='#f80';
+    sb.style.boxShadow='none';
+    cl.style.display='none';
+    cbw.style.display='none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// DRAW
+// ═══════════════════════════════════════════════════════
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  drawScene();
+  drawFinishApproach();
+
+  // Sort far-to-near
+  const all = [
+    ...enemies.map(e=>({type:'e',obj:e,vy:e.vy})),
+    ...fuels.map(f=>({type:'f',obj:f,vy:f.vy})),
+    ...pills.map(p=>({type:'p',obj:p,vy:p.vy})),
+    ...antidotes.map(a=>({type:'a',obj:a,vy:a.vy})),
+  ].sort((a,b)=>a.vy-b.vy);
+  all.forEach(o => {
+    if(o.type==='e') drawEnemy(o.obj);
+    else if(o.type==='f') drawFuelItem(o.obj);
+    else if(o.type==='p') drawPill(o.obj);
+    else drawAntidote(o.obj);
+  });
+
+  // Chaos mode — red screen tint flicker
+  if(chaosMode && Math.floor(frameCount/10)%3===0){
+    ctx.fillStyle='rgba(120,0,60,0.12)';
+    ctx.fillRect(0,0,W,H);
+  }
+
+  drawPlayer();
+  drawParticles();
+
+  // Speed streaks
+  if (scrollSpd > STAGES[stageIdx].baseSpd*1.15) {
+    ctx.strokeStyle='rgba(255,255,255,0.055)'; ctx.lineWidth=1;
+    for (let i=0; i<4; i++) {
+      const sx=ROAD_L+10+Math.random()*ROAD_W;
+      ctx.beginPath(); ctx.moveTo(sx,HORIZON_Y); ctx.lineTo(sx-2,H); ctx.stroke();
+    }
+  }
+
+  // Low fuel flash
+  if (fuel<20 && Math.floor(frameCount/8)%2===0) {
+    ctx.fillStyle='rgba(255,0,0,0.1)'; ctx.fillRect(0,0,W,H);
+  }
+
+  drawMinimap();
+  // Always keep HUD updated even when update() is paused (e.g. stageclear state)
+  if(gState==='stageclear') updateHUD();
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+initTrees();
+loop();
+</script>
+</body>
+</html>
